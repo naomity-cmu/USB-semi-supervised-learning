@@ -31,6 +31,7 @@ def get_cifar(args, alg, name, num_labels, num_classes, data_dir='./data', inclu
     crop_size = args.img_size
     crop_ratio = args.crop_ratio
 
+    # TODO: set default uagment same as weak
     transform_weak = transforms.Compose([
         transforms.Resize(crop_size),
         transforms.RandomCrop(crop_size, padding=int(crop_size * (1 - crop_ratio)), padding_mode='reflect'),
@@ -46,9 +47,18 @@ def get_cifar(args, alg, name, num_labels, num_classes, data_dir='./data', inclu
         ])
     elif exp_type == "cutout-only":
         transform_strong = transforms.Compose([
+            transforms.Resize(crop_size),
             RandAugment(0, 0), # only cutout
+            # add resize, and crop
             transforms.ToTensor(),
             transforms.Normalize(mean[name], std[name])
+        ])
+    elif exp_type == "mask":
+        transform_strong = transforms.Compose([
+            transforms.Resize(crop_size),
+            transforms.ToTensor(),
+            transforms.Normalize(mean[name], std[name]),
+            MaskAugment(mask_ratio, mask_position, mask_color)
         ])
     else:
         transform_strong = transforms.Compose([
