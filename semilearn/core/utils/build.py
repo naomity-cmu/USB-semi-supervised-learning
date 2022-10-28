@@ -57,7 +57,7 @@ def get_logger(name, save_path=None, level='INFO'):
     return logger
 
 
-def get_dataset(args, algorithm, dataset, num_labels, num_classes, mask_ratio, data_dir='./data', include_lb_to_ulb=True, exp_type="baseline"):
+def get_dataset(args, algorithm, dataset, num_labels, num_classes, data_dir='./data', include_lb_to_ulb=True, exp_type="baseline", mask_ratio=0.0):
     """
     create dataset
 
