@@ -21,7 +21,7 @@ std['cifar10'] = [0.229, 0.224, 0.225]
 std['cifar100'] = [x / 255 for x in [68.2, 65.4, 70.4]]
 
 
-def get_cifar(args, alg, name, num_labels, num_classes, data_dir='./data', include_lb_to_ulb=True, exp_type="baseline"):
+def get_cifar(args, alg, name, num_labels, num_classes, mask_ratio, data_dir='./data', include_lb_to_ulb=True, exp_type="baseline"):
     
     data_dir = os.path.join(data_dir, name.lower())
     dset = getattr(torchvision.datasets, name.upper())
@@ -31,7 +31,6 @@ def get_cifar(args, alg, name, num_labels, num_classes, data_dir='./data', inclu
     crop_size = args.img_size
     crop_ratio = args.crop_ratio
 
-    # TODO: set default uagment same as weak
     transform_weak = transforms.Compose([
         transforms.Resize(crop_size),
         transforms.RandomCrop(crop_size, padding=int(crop_size * (1 - crop_ratio)), padding_mode='reflect'),
@@ -42,23 +41,29 @@ def get_cifar(args, alg, name, num_labels, num_classes, data_dir='./data', inclu
 
     if exp_type == "noaug":
         transform_strong = transforms.Compose([
+            transforms.Resize(crop_size),
+            transforms.RandomCrop(crop_size, padding=int(crop_size * (1 - crop_ratio)), padding_mode='reflect'),
+            transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
             transforms.Normalize(mean[name], std[name])
         ])
     elif exp_type == "cutout-only":
         transform_strong = transforms.Compose([
             transforms.Resize(crop_size),
+            transforms.RandomCrop(crop_size, padding=int(crop_size * (1 - crop_ratio)), padding_mode='reflect'),
+            transforms.RandomHorizontalFlip(),
             RandAugment(0, 0), # only cutout
-            # add resize, and crop
             transforms.ToTensor(),
             transforms.Normalize(mean[name], std[name])
         ])
     elif exp_type == "mask":
         transform_strong = transforms.Compose([
             transforms.Resize(crop_size),
+            transforms.RandomCrop(crop_size, padding=int(crop_size * (1 - crop_ratio)), padding_mode='reflect'),
+            transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
             transforms.Normalize(mean[name], std[name]),
-            MaskAugment(mask_ratio, mask_position, mask_color)
+            MaskAugment(mask_ratio)
         ])
     else:
         transform_strong = transforms.Compose([
