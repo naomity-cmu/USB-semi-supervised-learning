@@ -9,7 +9,7 @@ import math
 
 from torchvision import transforms
 from .datasetbase import BasicDataset
-from semilearn.datasets.augmentation import RandAugment, RandomResizedCropAndInterpolation
+from semilearn.datasets.augmentation import RandAugment, RandomResizedCropAndInterpolation, MaskAugment
 from semilearn.datasets.utils import split_ssl_data
 
 
