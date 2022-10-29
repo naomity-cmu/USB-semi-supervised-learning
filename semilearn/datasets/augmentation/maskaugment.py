@@ -1,6 +1,9 @@
 import PIL
+from PIL import Image
+import PIL, PIL.ImageOps, PIL.ImageEnhance, PIL.ImageDraw
+import numpy as np
 
-def CutoutAbs(img, ratio, color, position):
+def Cutout(img, ratio, color, position):
     if ratio < 0:
         return img
 
@@ -28,7 +31,7 @@ class MaskAugment:
     """
     def __init__(self, mask_ratio='random', mask_color=(0, 0, 0), mask_position='random'):
         self.mask_ratio = mask_ratio
-        self.mask_color = mask_color
+        self.mask_color = tuple([int(c) for c in mask_color])
         self.mask_position = mask_position
         
     def __call__(self, img):
@@ -39,3 +42,15 @@ class MaskAugment:
             
         img = Cutout(img, self.mask_ratio, self.mask_color, self.mask_position)
         return img
+
+if __name__ == '__main__':
+    import os
+
+    os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
+    img = Image.open('./u.jpg')
+    randaug = MaskAugment(0.2)
+    img = randaug(img)
+    import matplotlib
+    from matplotlib import pyplot as plt 
+    plt.imshow(img)
+    plt.show()

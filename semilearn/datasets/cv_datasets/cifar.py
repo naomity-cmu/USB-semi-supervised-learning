@@ -61,9 +61,9 @@ def get_cifar(args, alg, name, num_labels, num_classes, mask_ratio, data_dir='./
             transforms.Resize(crop_size),
             transforms.RandomCrop(crop_size, padding=int(crop_size * (1 - crop_ratio)), padding_mode='reflect'),
             transforms.RandomHorizontalFlip(),
+            MaskAugment(mask_ratio, mask_color=tuple(mean[name])),
             transforms.ToTensor(),
             transforms.Normalize(mean[name], std[name]),
-            MaskAugment(mask_ratio)
         ])
     else:
         transform_strong = transforms.Compose([
