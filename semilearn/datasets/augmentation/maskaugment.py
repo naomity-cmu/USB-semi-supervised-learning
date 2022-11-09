@@ -3,21 +3,21 @@ import PIL
 from PIL import Image
 import PIL, PIL.ImageOps, PIL.ImageEnhance, PIL.ImageDraw
 import numpy as np
+import math
 
 def Cutout(img, ratio, color, position):
     if ratio < 0:
         return img
 
     w, h = img.size
-    size = ratio * img.size[0]
+    mask_w = ratio * w
+    mask_h = ratio * h
 
-    x0 = np.random.uniform(w)
-    y0 = np.random.uniform(h)
+    x0 = np.random.uniform(0, w - mask_w)
+    y0 = np.random.uniform(0, h - mask_h)
 
-    x0 = int(max(0, x0 - size / 2.))
-    y0 = int(max(0, y0 - size / 2.))
-    x1 = min(w, x0 + size)
-    y1 = min(h, y0 + size) 
+    x1 = min(w, x0 + mask_w)
+    y1 = min(h, y0 + mask_h) 
 
     xy = (x0, y0, x1, y1)
     img = img.copy()
@@ -31,7 +31,7 @@ class MaskAugment:
     mask_position: str, defaults to and only supports 'random'
     """
     def __init__(self, mask_ratio='random', mask_color=(0, 0, 0), mask_position='random'):
-        self.mask_ratio = mask_ratio
+        self.mask_ratio = math.sqrt(mask_ratio)
         self.mask_color = tuple([int(c) for c in mask_color])
         self.mask_position = mask_position
         
@@ -49,7 +49,7 @@ if __name__ == '__main__':
 
     os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
     img = Image.open('./u.jpg')
-    randaug = MaskAugment(0.3)
+    randaug = MaskAugment(0.5)
     img = randaug(img)
     import matplotlib
     from matplotlib import pyplot as plt 
