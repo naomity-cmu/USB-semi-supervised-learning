@@ -6,6 +6,7 @@ ssl_nlp_datasets/
 back_translate_models/
 
 u.jpg
+u-cuted.jpg
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
