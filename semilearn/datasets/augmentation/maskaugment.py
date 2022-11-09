@@ -1,3 +1,4 @@
+import random
 import PIL
 from PIL import Image
 import PIL, PIL.ImageOps, PIL.ImageEnhance, PIL.ImageDraw
@@ -48,9 +49,10 @@ if __name__ == '__main__':
 
     os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
     img = Image.open('./u.jpg')
-    randaug = MaskAugment(0.2)
+    randaug = MaskAugment(0.3)
     img = randaug(img)
     import matplotlib
     from matplotlib import pyplot as plt 
     plt.imshow(img)
     plt.show()
+    plt.savefig("./u-cuted.jpg")

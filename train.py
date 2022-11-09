@@ -80,6 +80,7 @@ def get_config():
     parser.add_argument('--net_from_name', type=str2bool, default=False)
     parser.add_argument('--use_pretrain', default=False, type=str2bool)
     parser.add_argument('--pretrain_path', default='', type=str)
+    parser.add_argument('--vit_mask_ratio', default=0.0, type=float)
 
     '''
     Algorithms Configurations

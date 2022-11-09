@@ -163,7 +163,7 @@ class AlgorithmBase:
         return optimizer, scheduler
 
     def set_model(self):
-        model = self.net_builder(num_classes=self.num_classes, pretrained=self.args.use_pretrain, pretrained_path=self.args.pretrain_path)
+        model = self.net_builder(num_classes=self.num_classes, pretrained=self.args.use_pretrain, pretrained_path=self.args.pretrain_path, vit_mask_ratio=self.args.vit_mask_ratio)
         return model
 
     def set_ema_model(self):

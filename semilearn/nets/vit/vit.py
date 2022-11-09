@@ -8,6 +8,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.checkpoint
+import numpy as np
 
 from timm.models.layers import DropPath, trunc_normal_
 from timm.models.layers.helpers import to_2tuple
@@ -18,7 +19,7 @@ from semilearn.nets.utils import load_checkpoint
 class PatchEmbed(nn.Module):
     """ 2D Image to Patch Embedding
     """
-    def __init__(self, img_size=224, patch_size=16, in_chans=3, embed_dim=768, norm_layer=None, flatten=True):
+    def __init__(self, img_size=224, patch_size=16, in_chans=3, embed_dim=768, norm_layer=None, flatten=True, mask_ratio=0):
         super().__init__()
         img_size = to_2tuple(img_size)
         patch_size = to_2tuple(patch_size)
@@ -27,18 +28,27 @@ class PatchEmbed(nn.Module):
         self.grid_size = (img_size[0] // patch_size[0], img_size[1] // patch_size[1])
         self.num_patches = self.grid_size[0] * self.grid_size[1]
         self.flatten = flatten
+        self.mask_ratio = mask_ratio
 
         self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size)
         self.norm = norm_layer(embed_dim) if norm_layer else nn.Identity()
 
     def forward(self, x):
         B, C, H, W = x.shape
-        assert(H == self.img_size[0], f"Input image height ({H}) doesn't match model ({self.img_size[0]}).")
-        assert(W == self.img_size[1], f"Input image width ({W}) doesn't match model ({self.img_size[1]}).")
+        assert H == self.img_size[0], "Input image height ({H}) doesn't match model ({self.img_size[0]})."
+        assert W == self.img_size[1], "Input image width ({W}) doesn't match model ({self.img_size[1]})."
         x = self.proj(x)
         if self.flatten:
             x = x.flatten(2).transpose(1, 2)  # BCHW -> BNC
+            B, N, C = x.shape # sequence length
         x = self.norm(x)
+
+        if self.mask_ratio > 0:
+            for i in range(B):
+                num_examples_dropped = int(N * self.mask_ratio)
+                idxs_dropped = np.random.choice(N, num_examples_dropped)
+                x[i, idxs_dropped, :] = torch.full((num_examples_dropped, C), -10.0).cuda()
+            
         return x
 
 
@@ -138,7 +148,7 @@ class VisionTransformer(nn.Module):
     def __init__(
             self, img_size=224, patch_size=16, in_chans=3, num_classes=1000, global_pool='token',
             embed_dim=768, depth=12, num_heads=12, mlp_ratio=4., qkv_bias=True,
-            drop_rate=0., attn_drop_rate=0., drop_path_rate=0., init_values=None,
+            drop_rate=0., attn_drop_rate=0., drop_path_rate=0., init_values=None, vit_mask_ratio=0,
             embed_layer=PatchEmbed, norm_layer=None, act_layer=None, block_fn=Block):
         """
         Args:
@@ -174,7 +184,7 @@ class VisionTransformer(nn.Module):
         self.grad_checkpointing = False
 
         self.patch_embed = embed_layer(
-            img_size=img_size, patch_size=patch_size, in_chans=in_chans, embed_dim=embed_dim)
+            img_size=img_size, patch_size=patch_size, in_chans=in_chans, embed_dim=embed_dim, mask_ratio=vit_mask_ratio)
         num_patches = self.patch_embed.num_patches
 
         self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
@@ -195,7 +205,7 @@ class VisionTransformer(nn.Module):
         self.num_features = self.embed_dim
         self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
 
-
+        print("mask_ratio is!!!", vit_mask_ratio)
 
     def extract(self, x):
         x = self.patch_embed(x)
@@ -289,3 +299,17 @@ def vit_base_patch16_224(pretrained=False, pretrained_path=None, **kwargs):
     if pretrained:
         model = load_checkpoint(model, pretrained_path)   
     return model
+
+
+if __name__ == "__main__":
+    N = 10
+    mask_ratio = 0.3
+    x = torch.randn((5, N, 3))
+    B, _, C = x.shape
+    
+    for i in range(B):
+        num_examples_dropped = int(N * mask_ratio)
+        idxs_dropped = np.random.choice(N, num_examples_dropped)
+        x[i, idxs_dropped, :] = torch.full((num_examples_dropped, C), -float('inf'))
+    
+    print(x)
