@@ -2,7 +2,7 @@ algorithm: fixmatch
 save_dir: ./saved_models/exp_cv/
 save_name: fixmatch_cifar100_400_0_vit_mask0.3
 resume: True
-load_path: ./saved_models/usb_cv//fixmatch_cifar100_400_0_vit_mask0.3/latest_model.pth
+load_path: ./saved_models/usb_cv/fixmatch_cifar100_400_0_vit_mask0.3/latest_model.pth
 overwrite: True
 vit_mask_ratio: 0.3
 use_tensorboard: True
@@ -30,7 +30,7 @@ momentum: 0.9
 weight_decay: 0.0005
 amp: False
 clip: 0.0
-use_cat: True
+use_cat: False
 net: vit_small_patch2_32
 net_from_name: False
 data_dir: /home/dlproj22/data

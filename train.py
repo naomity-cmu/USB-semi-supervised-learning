@@ -80,7 +80,6 @@ def get_config():
     parser.add_argument('--net_from_name', type=str2bool, default=False)
     parser.add_argument('--use_pretrain', default=False, type=str2bool)
     parser.add_argument('--pretrain_path', default='', type=str)
-    parser.add_argument('--vit_mask_ratio', default=0.0, type=float)
 
     '''
     Algorithms Configurations
@@ -152,7 +151,7 @@ def get_config():
     over_write_args_from_file(args, args.c)
     for argument in name2alg[args.algorithm].get_argument():
         parser.add_argument(argument.name, type=argument.type, default=argument.default, help=argument.help)
-
+  
     args = parser.parse_args()
     over_write_args_from_file(args, args.c)
     return args

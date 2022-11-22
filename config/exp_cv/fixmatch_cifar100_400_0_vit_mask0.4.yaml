@@ -1,11 +1,12 @@
 algorithm: fixmatch
 save_dir: ./saved_models/exp_cv/
-save_name: fixmatch_cifar100_400_0_mask0.2_corrected
+save_name: fixmatch_cifar100_400_0_vit_mask0.4_mask
 resume: True
-load_path: ./saved_models/usb_cv//fixmatch_cifar100_400_0_mask0.2_corrected/latest_model.pth
+load_path: ./saved_models/usb_cv/fixmatch_cifar100_400_0_vit_mask0.4/latest_model.pth
 overwrite: True
+vit_mask_ratio: 0.4
 use_tensorboard: True
-exp_type: mask
+exp_type: noaug
 epoch: 200
 num_train_iter: 204800
 num_log_iter: 512
@@ -17,7 +18,6 @@ num_labels: 400
 uratio: 1
 ema_m: 0.0
 hard_label: True
-mask_ratio: 0.2
 T: 0.5
 p_cutoff: 0.95
 ulb_loss_ratio: 1.0
@@ -30,7 +30,7 @@ momentum: 0.9
 weight_decay: 0.0005
 amp: False
 clip: 0.0
-use_cat: True
+use_cat: False
 net: vit_small_patch2_32
 net_from_name: False
 data_dir: /home/dlproj22/data

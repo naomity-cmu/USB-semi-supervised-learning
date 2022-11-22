@@ -19,7 +19,7 @@ from semilearn.nets.utils import load_checkpoint
 class PatchEmbed(nn.Module):
     """ 2D Image to Patch Embedding
     """
-    def __init__(self, img_size=224, patch_size=16, in_chans=3, embed_dim=768, norm_layer=None, flatten=True, mask_ratio=0):
+    def __init__(self, img_size=224, patch_size=16, in_chans=3, embed_dim=768, norm_layer=None, flatten=True):
         super().__init__()
         img_size = to_2tuple(img_size)
         patch_size = to_2tuple(patch_size)
@@ -28,7 +28,6 @@ class PatchEmbed(nn.Module):
         self.grid_size = (img_size[0] // patch_size[0], img_size[1] // patch_size[1])
         self.num_patches = self.grid_size[0] * self.grid_size[1]
         self.flatten = flatten
-        self.mask_ratio = mask_ratio
 
         self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size)
         self.norm = norm_layer(embed_dim) if norm_layer else nn.Identity()
@@ -40,16 +39,30 @@ class PatchEmbed(nn.Module):
         x = self.proj(x)
         if self.flatten:
             x = x.flatten(2).transpose(1, 2)  # BCHW -> BNC
-            B, N, C = x.shape # sequence length
         x = self.norm(x)
-
-        if self.mask_ratio > 0:
-            for i in range(B):
-                num_examples_dropped = int(N * self.mask_ratio)
-                idxs_dropped = np.random.choice(N, num_examples_dropped)
-                x[i, idxs_dropped, :] = torch.full((num_examples_dropped, C), -10.0).cuda()
             
         return x
+
+
+class DropPatch(nn.Module):
+    def __init__(self):
+        super().__init__()
+        
+    def forward(self, x, mask_ratio):
+        B, N, C = x.shape
+        num_examples_keep = int((N - 1) * (1 - mask_ratio))
+        
+        for b in range(B):
+            idxs_keep = np.random.choice(N-1, num_examples_keep, replace=False) # add seed, or pass the idxes directly
+            idxs_keep.sort()
+            idxs_keep += 1
+            idxs_keep = np.concatenate([[0], idxs_keep])
+            x[b] = torch.concat((x[b, idxs_keep, :], torch.full((N - num_examples_keep - 1, C), 0.).cuda()))
+    
+        x = x[:, :num_examples_keep + 1, :]
+            
+        return x
+
 
 
 class Mlp(nn.Module):
@@ -91,10 +104,9 @@ class Attention(nn.Module):
 
     def forward(self, x):
         B, N, C = x.shape
-        qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
-        q, k, v = qkv.unbind(0)   # make torchscript happy (cannot use tensor as tuple)
-
-        attn = (q @ k.transpose(-2, -1)) * self.scale
+        qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4) # 3, B, num_heads, N, C // num_heads
+        q, k, v = qkv.unbind(0)   # make torchscript happy (cannot use tensor as tuple) shape: B, num_heads, N, C // num_heads
+        attn = (q @ k.transpose(-2, -1)) * self.scale # shape: B, num_heads, N, N        
         attn = attn.softmax(dim=-1)
         attn = self.attn_drop(attn)
 
@@ -138,7 +150,6 @@ class Block(nn.Module):
         return x
 
 
-
 class VisionTransformer(nn.Module):
     """ Vision Transformer
     A PyTorch impl of : `An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale`
@@ -148,7 +159,7 @@ class VisionTransformer(nn.Module):
     def __init__(
             self, img_size=224, patch_size=16, in_chans=3, num_classes=1000, global_pool='token',
             embed_dim=768, depth=12, num_heads=12, mlp_ratio=4., qkv_bias=True,
-            drop_rate=0., attn_drop_rate=0., drop_path_rate=0., init_values=None, vit_mask_ratio=0,
+            drop_rate=0., attn_drop_rate=0., drop_path_rate=0., init_values=None,
             embed_layer=PatchEmbed, norm_layer=None, act_layer=None, block_fn=Block):
         """
         Args:
@@ -184,7 +195,7 @@ class VisionTransformer(nn.Module):
         self.grad_checkpointing = False
 
         self.patch_embed = embed_layer(
-            img_size=img_size, patch_size=patch_size, in_chans=in_chans, embed_dim=embed_dim, mask_ratio=vit_mask_ratio)
+            img_size=img_size, patch_size=patch_size, in_chans=in_chans, embed_dim=embed_dim)
         num_patches = self.patch_embed.num_patches
 
         self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
@@ -204,19 +215,22 @@ class VisionTransformer(nn.Module):
         self.fc_norm = norm_layer(embed_dim) if use_fc_norm else nn.Identity()
         self.num_features = self.embed_dim
         self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
+        self.drop_patch_layer = DropPatch()
 
-        print("mask_ratio is!!!", vit_mask_ratio)
-
-    def extract(self, x):
+    def extract(self, x, mask_ratio):
         x = self.patch_embed(x)
+        # random drop layer, 1) drop patches - all samples ahve same length
+        # pad at end if lengths are different
         x = torch.cat((self.cls_token.expand(x.shape[0], -1, -1), x), dim=1)
+        # x = self.pos_drop(x + self.pos_embed[:, :int((1-mask_ratio)*self.pos_embed.shape[1]), :])
         x = self.pos_drop(x + self.pos_embed)
+        x = self.drop_patch_layer(x, mask_ratio)
         x = self.blocks(x)
         x = self.norm(x)
         return x
 
 
-    def forward(self, x, only_fc=False, only_feat=False, **kwargs):
+    def forward(self, x, mask_ratio, only_fc=False, only_feat=False, **kwargs):
         """
         Args:
             x: input tensor, depends on only_fc and only_feat flag
@@ -227,7 +241,7 @@ class VisionTransformer(nn.Module):
         if only_fc:
             return self.head(x)
         
-        x = self.extract(x)
+        x = self.extract(x, mask_ratio)
         if self.global_pool:
             x = x[:, 1:].mean(dim=1) if self.global_pool == 'avg' else x[:, 0]
         x = self.fc_norm(x)
@@ -302,14 +316,34 @@ def vit_base_patch16_224(pretrained=False, pretrained_path=None, **kwargs):
 
 
 if __name__ == "__main__":
-    N = 10
+    
+    x = torch.randn((2, 10, 128))
+    
+    embed_dim = 128
+    
+    cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
+    x = torch.cat((cls_token.expand(x.shape[0], -1, -1), x), dim=1)
+    
+    print(x.shape)
+    
+    print(x[0, :, 0])
+    
+    B, N, C = x.shape
+    
     mask_ratio = 0.3
-    x = torch.randn((5, N, 3))
-    B, _, C = x.shape
+
+    num_examples_keep = int((N - 1) * (1 - mask_ratio))
     
-    for i in range(B):
-        num_examples_dropped = int(N * mask_ratio)
-        idxs_dropped = np.random.choice(N, num_examples_dropped)
-        x[i, idxs_dropped, :] = torch.full((num_examples_dropped, C), -float('inf'))
+    for b in range(B):
+        idxs_keep = np.random.choice(N-1, num_examples_keep, replace=False) # add seed, or pass the idxes directly
+        idxs_keep.sort()
+        print(idxs_keep)
+        idxs_keep += 1
+        idxs_keep = np.concatenate([idxs_keep, [0]])
+        print(idxs_keep)
+        print(num_examples_keep)
+        x[b] = torch.concat((x[b, idxs_keep, :], torch.full((N - num_examples_keep - 1, C), 0.)))
+
+    x = x[:, :num_examples_keep + 1, :]
     
-    print(x)
+    print(x.shape)
