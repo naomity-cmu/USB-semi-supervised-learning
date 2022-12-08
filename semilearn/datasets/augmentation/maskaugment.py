@@ -31,13 +31,16 @@ class MaskAugment:
     mask_position: str, defaults to and only supports 'random'
     """
     def __init__(self, mask_ratio='random', mask_color=(0, 0, 0), mask_position='random'):
-        self.mask_ratio = math.sqrt(mask_ratio)
+        if mask_ratio == 1.0:
+            self.mask_ratio = "random"
+        else:
+            self.mask_ratio = math.sqrt(mask_ratio)
         self.mask_color = tuple([int(c) for c in mask_color])
         self.mask_position = mask_position
         
     def __call__(self, img):
         if self.mask_ratio == "random":
-            self.mask_ratio = random.random() * 0.5 
+            self.mask_ratio = np.random.uniform(0.1, 0.7)
 
         assert 0 <= self.mask_ratio < 1
             

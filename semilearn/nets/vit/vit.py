@@ -15,6 +15,8 @@ from timm.models.layers.helpers import to_2tuple
 
 from semilearn.nets.utils import load_checkpoint
 
+import random
+
 
 class PatchEmbed(nn.Module):
     """ 2D Image to Patch Embedding
@@ -44,24 +46,24 @@ class PatchEmbed(nn.Module):
         return x
 
 
-class DropPatch(nn.Module):
-    def __init__(self):
-        super().__init__()
+# class DropPatch(nn.Module):
+#     def __init__(self):
+#         super().__init__()
         
-    def forward(self, x, mask_ratio):
-        B, N, C = x.shape
-        num_examples_keep = int((N - 1) * (1 - mask_ratio))
+#     def forward(self, x, mask_ratio):
+#         B, N, C = x.shape
+#         num_examples_keep = int((N - 1) * (1 - mask_ratio))
         
-        for b in range(B):
-            idxs_keep = np.random.choice(N-1, num_examples_keep, replace=False) # add seed, or pass the idxes directly
-            idxs_keep.sort()
-            idxs_keep += 1
-            idxs_keep = np.concatenate([[0], idxs_keep])
-            x[b] = torch.concat((x[b, idxs_keep, :], torch.full((N - num_examples_keep - 1, C), 0.).cuda()))
+#         for b in range(B):
+#             idxs_keep = np.random.choice(N-1, num_examples_keep, replace=False) # add seed, or pass the idxes directly
+#             idxs_keep.sort()
+#             idxs_keep += 1
+#             idxs_keep = np.concatenate([[0], idxs_keep])
+#             x[b] = torch.concat((x[b, idxs_keep, :], torch.full((N - num_examples_keep - 1, C), 0.).cuda()))
     
-        x = x[:, :num_examples_keep + 1, :]
+#         x = x[:, :num_examples_keep + 1, :]
             
-        return x
+#         return x
 
 
 
@@ -215,16 +217,36 @@ class VisionTransformer(nn.Module):
         self.fc_norm = norm_layer(embed_dim) if use_fc_norm else nn.Identity()
         self.num_features = self.embed_dim
         self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
-        self.drop_patch_layer = DropPatch()
+        # self.drop_patch_layer = DropPatch()
+
+    def random_masking(self, x, mask_ratio):
+        N, L, D = x.shape
+        len_keep = int(L * (1 - mask_ratio))
+
+        noise = torch.rand(N, L, device = x.device)
+
+        idxs_shuffle = torch.argsort(noise, dim=1)
+
+        idxs_keep = idxs_shuffle[:, :len_keep]
+        x_masked = torch.gather(x, dim=1, index=idxs_keep.unsqueeze(-1).repeat(1, 1, D))
+
+        return x_masked
+
 
     def extract(self, x, mask_ratio):
         x = self.patch_embed(x)
+        x = x + self.pos_embed[:, 1:, :]
+    
+        if mask_ratio > 0:
+            mask_ratio = np.random.uniform(0.1, 0.7)
+            x = self.random_masking(x, mask_ratio)
+
         # random drop layer, 1) drop patches - all samples ahve same length
         # pad at end if lengths are different
-        x = torch.cat((self.cls_token.expand(x.shape[0], -1, -1), x), dim=1)
-        # x = self.pos_drop(x + self.pos_embed[:, :int((1-mask_ratio)*self.pos_embed.shape[1]), :])
-        x = self.pos_drop(x + self.pos_embed)
-        x = self.drop_patch_layer(x, mask_ratio)
+        x = torch.cat((self.cls_token.expand(x.shape[0], -1, -1) + self.pos_embed[:, :1, :], x), dim=1)
+        x = self.pos_drop(x)
+        # x = self.drop_patch_layer(x, mask_ratio)
+        
         x = self.blocks(x)
         x = self.norm(x)
         return x
